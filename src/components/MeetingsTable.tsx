@@ -194,7 +194,7 @@ export default function MeetingsTable() {
           return (
             <div
               key={m.id}
-              className="rounded-2xl border bg-white p-4 cursor-pointer transition-all hover:shadow-md"
+              className="interactive-card rounded-2xl border bg-white p-4 cursor-pointer transition-all hover:shadow-md"
               style={{ borderColor: 'var(--color-border)', boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}
               onClick={() => setSelectedMeeting(m)}
             >

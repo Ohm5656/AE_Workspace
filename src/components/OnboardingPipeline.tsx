@@ -403,7 +403,7 @@ export default function OnboardingPipeline() {
                   return (
                     <div
                       key={hotel.id}
-                      className="rounded-xl border bg-white p-3 cursor-pointer transition-all hover:shadow-md"
+                      className="interactive-card rounded-xl border bg-white p-3 cursor-pointer transition-all hover:shadow-md"
                       style={{
                         borderColor: status === 'ok' ? 'var(--color-border)' : sc.border,
                         borderLeftWidth: status !== 'ok' ? '3px' : '1px',

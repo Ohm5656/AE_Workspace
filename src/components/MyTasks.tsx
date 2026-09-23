@@ -344,7 +344,7 @@ export default function MyTasks() {
                 <button
                   key={type}
                   onClick={() => setFilterType(active ? "All" : type)}
-                  className="text-left px-4 py-3 rounded-2xl border-2 transition-all hover:shadow-md"
+                  className="interactive-card text-left px-4 py-3 rounded-2xl border-2 transition-all hover:shadow-md"
                   style={{
                     background: active ? c.bg : "#fff",
                     borderColor: active ? c.text : "var(--color-border)",
@@ -481,7 +481,7 @@ export default function MyTasks() {
                     return (
                       <div
                         key={task.id}
-                        className="group flex items-center gap-3 md:gap-4 px-4 py-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md"
+                        className="interactive-card group flex items-center gap-3 md:gap-4 px-4 py-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md"
                         style={{
                           background: "#fff",
                           borderColor:

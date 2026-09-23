@@ -400,19 +400,19 @@ export default function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">
-          <section className={page === "tasks" ? "block" : "hidden"} aria-hidden={page !== "tasks"}>
+          <section className={page === "tasks" ? "page-enter block" : "hidden"} aria-hidden={page !== "tasks"}>
             <MyTasks />
           </section>
-          <section className={page === "onboarding" ? "block" : "hidden"} aria-hidden={page !== "onboarding"}>
+          <section className={page === "onboarding" ? "page-enter block" : "hidden"} aria-hidden={page !== "onboarding"}>
             <OnboardingPipeline />
           </section>
-          <section className={page === "calendar" ? "block" : "hidden"} aria-hidden={page !== "calendar"}>
+          <section className={page === "calendar" ? "page-enter block" : "hidden"} aria-hidden={page !== "calendar"}>
             <CalendarView />
           </section>
-          <section className={page === "meetings" ? "block" : "hidden"} aria-hidden={page !== "meetings"}>
+          <section className={page === "meetings" ? "page-enter block" : "hidden"} aria-hidden={page !== "meetings"}>
             <MeetingsTable />
           </section>
-          <section className={page === "surveys" ? "block" : "hidden"} aria-hidden={page !== "surveys"}>
+          <section className={page === "surveys" ? "page-enter block" : "hidden"} aria-hidden={page !== "surveys"}>
             <SurveyView />
           </section>
         </main>
@@ -466,7 +466,7 @@ export default function App() {
             onClick={() => setNotifOpen(false)}
           />
           <div
-            className="fixed right-4 top-16 md:top-auto md:bottom-20 md:right-4 w-80 rounded-2xl shadow-2xl z-50 border overflow-hidden"
+            className="panel-enter fixed right-4 top-16 md:top-auto md:bottom-20 md:right-4 w-80 rounded-2xl shadow-2xl z-50 border overflow-hidden"
             style={{
               background: "var(--color-card)",
               borderColor: "var(--color-border)",
