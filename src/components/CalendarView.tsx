@@ -1,32 +1,12 @@
 import { useState } from 'react'
-
-interface CalMeeting {
-  id: number
-  hotel: string
-  type: 'ORM' | 'Marcom'
-  status: 'Draft' | 'Waiting Confirm' | 'Confirmed' | 'Completed'
-  day: number
-  time: string
-  tier: string
-}
+import { type Meeting, type MeetingStatus, useMeetings } from './MeetingContext'
+import { useWorkspaceShell } from './WorkspaceShellContext'
 
 interface UnassignedHotel {
   id: number
   name: string
   tier: 'A' | 'B' | 'C'
 }
-
-const initialMeetings: CalMeeting[] = [
-  { id: 1, hotel: 'Riverside Krabi Resort',  type: 'ORM',    status: 'Confirmed',      day: 2,  time: '09:00', tier: 'A' },
-  { id: 2, hotel: 'Sunset Villa Phuket',     type: 'Marcom', status: 'Confirmed',      day: 3,  time: '13:00', tier: 'A' },
-  { id: 3, hotel: 'Bay Resort Pattaya',      type: 'ORM',    status: 'Draft',          day: 5,  time: '09:00', tier: 'B' },
-  { id: 4, hotel: 'Ocean View Koh Samui',    type: 'Marcom', status: 'Waiting Confirm',day: 8,  time: '15:00', tier: 'A' },
-  { id: 5, hotel: 'Hillside Chiang Mai',     type: 'ORM',    status: 'Confirmed',      day: 10, time: '13:00', tier: 'B' },
-  { id: 6, hotel: 'Azure Beach Hua Hin',     type: 'Marcom', status: 'Completed',      day: 15, time: '09:00', tier: 'B' },
-  { id: 7, hotel: 'Palm Garden Rayong',      type: 'ORM',    status: 'Waiting Confirm',day: 17, time: '13:00', tier: 'C' },
-  { id: 8, hotel: 'Lagoon Resort Krabi',     type: 'Marcom', status: 'Draft',          day: 20, time: '15:00', tier: 'B' },
-  { id: 9, hotel: 'Mountain View Pai',       type: 'ORM',    status: 'Confirmed',      day: 22, time: '09:00', tier: 'C' },
-]
 
 const unassignedInit: UnassignedHotel[] = [
   { id: 1, name: 'The Harbor Pattaya',       tier: 'A' },
@@ -35,36 +15,46 @@ const unassignedInit: UnassignedHotel[] = [
   { id: 4, name: 'Sea Breeze Trat',          tier: 'A' },
   { id: 5, name: 'Jungle Lodge Kanchanaburi',tier: 'B' },
   { id: 6, name: 'Baan Suan Pattaya',        tier: 'B' },
+  { id: 7, name: 'Forest Retreat Nan',        tier: 'C' },
+  { id: 8, name: 'River House Ayutthaya',     tier: 'C' },
 ]
 
 const weekDays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const times    = ['09:00','11:00','13:00','15:00','17:00']
 
-function statusStyle(status: CalMeeting['status'], type: CalMeeting['type']) {
+function statusStyle(status: MeetingStatus, type: Meeting['type']) {
   if (status === 'Confirmed')      return type === 'ORM' ? { bg: '#1A56DB', text: '#fff' }   : { bg: '#0A7A3E', text: '#fff' }
   if (status === 'Waiting Confirm') return { bg: '#FFF8E6', text: '#D97706' }
   if (status === 'Draft')           return { bg: '#F5F7FA', text: '#6B7280' }
   if (status === 'Completed')       return { bg: '#F0FDF4', text: '#16A34A' }
+  if (status === 'Sent')            return { bg: '#FFF8E6', text: '#D97706' }
+  if (status === 'Declined')        return { bg: '#FFF0F0', text: '#DC2626' }
+  if (status === 'Postponed')       return { bg: '#F5F0FF', text: '#7C3AED' }
+  if (status === 'No-show')         return { bg: '#FFF3E0', text: '#B35A00' }
   return { bg: '#F5F7FA', text: '#6B7280' }
 }
 
-const statusSummary = [
-  { label: 'Draft',    count: 4, color: '#9CA3AF' },
-  { label: 'Waiting',  count: 4, color: '#D97706' },
-  { label: 'Confirmed',count: 3, color: '#1A56DB' },
-  { label: 'Completed',count: 3, color: '#16A34A' },
-  { label: 'Rejected', count: 1, color: '#DC2626' },
-  { label: 'Postponed',count: 1, color: '#7C3AED' },
+const summaryStatuses: { label: MeetingStatus; color: string }[] = [
+  { label: 'Draft', color: '#9CA3AF' },
+  { label: 'Sent', color: '#D97706' },
+  { label: 'Waiting Confirm', color: '#F59E0B' },
+  { label: 'Confirmed', color: '#1A56DB' },
+  { label: 'Completed', color: '#16A34A' },
+  { label: 'Declined', color: '#DC2626' },
+  { label: 'Postponed', color: '#7C3AED' },
+  { label: 'No-show', color: '#B35A00' },
 ]
 
 export default function CalendarView() {
-  const [meetings, setMeetings]     = useState<CalMeeting[]>(initialMeetings)
+  const { meetings, addMeeting, updateMeeting } = useMeetings()
+  const { addNotification } = useWorkspaceShell()
   const [dragHotel, setDragHotel]   = useState<UnassignedHotel | null>(null)
   const [scheduleModal, setScheduleModal] = useState<{ hotel: UnassignedHotel; day: number } | null>(null)
-  const [selectedMeeting, setSelectedMeeting] = useState<CalMeeting | null>(null)
+  const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null)
   const [newType, setNewType]       = useState<'ORM' | 'Marcom'>('ORM')
   const [newTime, setNewTime]       = useState('09:00')
-  const [syncTime, setSyncTime]     = useState('Today, 09:34 AM')
+  const [syncTimes, setSyncTimes] = useState({ ORM: 'Today, 09:34 AM', Marcom: 'Today, 09:34 AM' })
+  const [syncing, setSyncing] = useState<'ORM' | 'Marcom' | null>(null)
   const [unassigned, setUnassigned] = useState(unassignedInit)
   const [filterType, setFilterType] = useState<'All' | 'ORM' | 'Marcom'>('All')
   const [showUnassigned, setShowUnassigned] = useState(false)
@@ -75,21 +65,48 @@ export default function CalendarView() {
 
   function confirmSchedule() {
     if (!scheduleModal) return
-    setMeetings((prev) => [
-      ...prev,
-      { id: prev.length + 100, hotel: scheduleModal.hotel.name, type: newType, status: 'Draft', day: scheduleModal.day, time: newTime, tier: scheduleModal.hotel.tier },
-    ])
+    addMeeting({
+      hotel: scheduleModal.hotel.name,
+      type: newType,
+      status: 'Draft',
+      date: `2026-09-${String(scheduleModal.day).padStart(2, '0')}`,
+      time: newTime,
+      tier: scheduleModal.hotel.tier,
+      tierPct: scheduleModal.hotel.tier === 'A' ? 90 : scheduleModal.hotel.tier === 'B' ? 70 : 50,
+      ownerAE: 'Somchai K.',
+      orm: newType === 'ORM' ? 'Niran T.' : 'Wanchai P.',
+      surveyStatus: 'N/A',
+      hotelStatus: 'Active',
+    })
     setUnassigned((prev) => prev.filter((h) => h.id !== scheduleModal.hotel.id))
+    addNotification({
+      title: 'Meeting draft created',
+      description: `${scheduleModal.hotel.name} · ${scheduleModal.day} Sep at ${newTime}`,
+      type: 'success',
+      target: 'meetings',
+    })
     setScheduleModal(null)
   }
 
-  function sync() {
+  function sync(type: 'ORM' | 'Marcom') {
     const now = new Date()
-    setSyncTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · ${now.getDate()} Sep`)
+    setSyncing(type)
+    setSyncTimes((current) => ({
+      ...current,
+      [type]: `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · ${now.getDate()} Sep`,
+    }))
+    window.setTimeout(() => setSyncing(null), 700)
   }
 
   const tierA = unassigned.filter((h) => h.tier === 'A')
   const tierB = unassigned.filter((h) => h.tier === 'B')
+  const tierC = unassigned.filter((h) => h.tier === 'C')
+
+  const calendarMeetings = meetings.filter((meeting) => meeting.date.startsWith('2026-09-'))
+  const selectedMeeting = meetings.find((meeting) => meeting.id === selectedMeetingId) ?? null
+  const selectedTimeUnavailable = scheduleModal
+    ? meetings.some((meeting) => meeting.date === `2026-09-${String(scheduleModal.day).padStart(2, '0')}` && meeting.time === newTime && meeting.status !== 'Declined')
+    : false
 
   const days = Array.from({ length: 30 }, (_, i) => i + 1)
 
@@ -104,9 +121,9 @@ export default function CalendarView() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs hidden sm:block" style={{ color: 'var(--color-text-muted)' }}>Synced: {syncTime}</span>
-          <button className="btn-ghost text-xs" onClick={sync} style={{ color: 'var(--color-navy)', borderColor: '#C7D7FF' }}>⟳ Sync ORM</button>
-          <button className="btn-ghost text-xs" onClick={sync} style={{ color: 'var(--color-forest)', borderColor: '#A7F0C4' }}>⟳ Sync Marcom</button>
+          <span className="text-xs hidden lg:block" style={{ color: 'var(--color-text-muted)' }}>ORM: {syncTimes.ORM} · Marcom: {syncTimes.Marcom}</span>
+          <button className="btn-ghost text-xs" onClick={() => sync('ORM')} style={{ color: 'var(--color-navy)', borderColor: '#C7D7FF' }}>{syncing === 'ORM' ? 'Syncing…' : '⟳ Sync ORM'}</button>
+          <button className="btn-ghost text-xs" onClick={() => sync('Marcom')} style={{ color: 'var(--color-forest)', borderColor: '#A7F0C4' }}>{syncing === 'Marcom' ? 'Syncing…' : '⟳ Sync Marcom'}</button>
           <button
             className="btn-ghost text-xs md:hidden"
             onClick={() => setShowUnassigned(!showUnassigned)}
@@ -127,9 +144,9 @@ export default function CalendarView() {
                 key={h.id}
                 className="text-xs px-3 py-1.5 rounded-xl border font-medium"
                 style={{
-                  background: h.tier === 'A' ? '#EBF2FF' : '#F0FDF4',
-                  borderColor: h.tier === 'A' ? '#C7D7FF' : '#A7F0C4',
-                  color: h.tier === 'A' ? '#1A56DB' : '#16A34A',
+                  background: h.tier === 'A' ? '#EBF2FF' : h.tier === 'B' ? '#F0FDF4' : '#F5F7FA',
+                  borderColor: h.tier === 'A' ? '#C7D7FF' : h.tier === 'B' ? '#A7F0C4' : '#E5E7EB',
+                  color: h.tier === 'A' ? '#1A56DB' : h.tier === 'B' ? '#16A34A' : '#6B7280',
                 }}
                 onClick={() => setScheduleModal({ hotel: h, day: 23 })}
               >
@@ -145,11 +162,11 @@ export default function CalendarView() {
         <div className="flex-1 min-w-0 space-y-3">
           {/* Status summary */}
           <div className="flex flex-wrap gap-3 p-3 rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
-            {statusSummary.map((s) => (
+            {summaryStatuses.map((s) => (
               <div key={s.label} className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
-                <span className="text-xs font-bold" style={{ color: 'var(--color-text)' }}>{s.count}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{s.label === 'Waiting Confirm' ? 'Waiting' : s.label}</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--color-text)' }}>{calendarMeetings.filter((meeting) => meeting.status === s.label).length}</span>
               </div>
             ))}
             <div className="ml-auto flex gap-1.5">
@@ -184,7 +201,7 @@ export default function CalendarView() {
                 <div key={i} className="border-b border-r min-h-[70px] md:min-h-[80px]" style={{ borderColor: 'var(--color-border)' }} />
               ))}
               {days.map((day) => {
-                const dayMeetings = meetings.filter((m) => m.day === day && (filterType === 'All' || m.type === filterType))
+                const dayMeetings = calendarMeetings.filter((m) => Number(m.date.slice(-2)) === day && (filterType === 'All' || m.type === filterType))
                 const isToday = day === 23
                 return (
                   <div
@@ -212,7 +229,7 @@ export default function CalendarView() {
                             key={m.id}
                             className="text-xs px-1 py-0.5 rounded-lg truncate cursor-pointer transition-opacity hover:opacity-80"
                             style={{ background: sc.bg, color: sc.text, fontSize: '10px' }}
-                            onClick={() => setSelectedMeeting(m)}
+                            onClick={() => setSelectedMeetingId(m.id)}
                           >
                             {m.time} {m.hotel.split(' ')[0]}
                           </div>
@@ -277,6 +294,25 @@ export default function CalendarView() {
                   ))}
                 </div>
               )}
+              {tierC.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold px-1 mb-1.5" style={{ color: '#6B7280' }}>
+                    Tier C Optional ({tierC.length})
+                  </div>
+                  {tierC.map((h) => (
+                    <div
+                      key={h.id}
+                      draggable
+                      onDragStart={() => setDragHotel(h)}
+                      className="flex items-center gap-2 px-2 py-2 rounded-xl border mb-1.5 cursor-grab hover:shadow-sm transition-all active:cursor-grabbing"
+                      style={{ background: '#F5F7FA', borderColor: '#E5E7EB' }}
+                    >
+                      <span className="text-xs opacity-50">⠿</span>
+                      <span className="text-xs font-semibold truncate" style={{ color: '#6B7280' }}>{h.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {unassigned.length === 0 && (
                 <div className="text-center py-6 text-xs font-thai" style={{ color: 'var(--color-text-muted)' }}>
                   จัดทุกโรงแรมเรียบร้อย 🎉
@@ -319,26 +355,36 @@ export default function CalendarView() {
                 <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--color-text-muted)' }}>เวลา</label>
                 <div className="flex flex-wrap gap-2">
                   {times.map((t) => (
+                    (() => {
+                      const unavailable = meetings.some((meeting) => meeting.date === `2026-09-${String(scheduleModal.day).padStart(2, '0')}` && meeting.time === t && meeting.status !== 'Declined')
+                      return (
                     <button
                       key={t}
                       onClick={() => setNewTime(t)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all"
+                      disabled={unavailable}
+                      title={unavailable ? 'ช่วงเวลานี้ไม่ว่าง' : 'ช่วงเวลาว่าง'}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all disabled:cursor-not-allowed disabled:opacity-35"
                       style={{
                         background:  newTime === t ? 'var(--color-navy)' : '#fff',
                         color:       newTime === t ? '#fff' : 'var(--color-text-2)',
                         borderColor: newTime === t ? 'var(--color-navy)' : 'var(--color-border)',
                       }}
                     >
-                      {t}
+                      {t}{unavailable ? ' · Busy' : ''}
                     </button>
+                      )
+                    })()
                   ))}
                 </div>
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="btn-primary flex-1 text-center" onClick={confirmSchedule}>สร้าง Draft</button>
+              <button className="btn-primary flex-1 text-center disabled:cursor-not-allowed disabled:opacity-40" disabled={selectedTimeUnavailable} onClick={confirmSchedule}>สร้าง Draft</button>
               <button className="btn-ghost flex-1 text-center" onClick={() => setScheduleModal(null)}>ยกเลิก</button>
             </div>
+            {selectedTimeUnavailable && (
+              <p className="mt-2 text-center text-xs font-thai" style={{ color: '#DC2626' }}>ช่วงเวลานี้ไม่ว่าง กรุณาเลือกเวลาอื่น</p>
+            )}
           </div>
         </div>
       )}
@@ -356,7 +402,7 @@ export default function CalendarView() {
               </span>
               <button
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                onClick={() => setSelectedMeeting(null)}
+                onClick={() => setSelectedMeetingId(null)}
                 style={{ color: 'var(--color-text-muted)' }}
               >✕</button>
             </div>
@@ -364,18 +410,29 @@ export default function CalendarView() {
               {selectedMeeting.hotel}
             </h3>
             <p className="text-sm mb-5 font-thai" style={{ color: 'var(--color-text-muted)' }}>
-              {selectedMeeting.day} Sep 2026 · {selectedMeeting.time}
+              {Number(selectedMeeting.date.slice(-2))} Sep 2026 · {selectedMeeting.time}
             </p>
-            {(selectedMeeting.status === 'Draft' || selectedMeeting.status === 'Waiting Confirm') && (
+            {(['Draft', 'Sent', 'Waiting Confirm'] as MeetingStatus[]).includes(selectedMeeting.status) && (
               <button
                 className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
                 style={{ background: 'var(--color-forest)', boxShadow: '0 2px 8px rgba(10,122,62,.3)' }}
                 onClick={() => {
-                  setMeetings((prev) => prev.map((m) => m.id === selectedMeeting.id ? { ...m, status: 'Confirmed' } : m))
-                  setSelectedMeeting(null)
+                  const nextStatus: MeetingStatus = selectedMeeting.status === 'Draft'
+                    ? 'Sent'
+                    : selectedMeeting.status === 'Sent'
+                      ? 'Waiting Confirm'
+                      : 'Confirmed'
+                  updateMeeting(selectedMeeting.id, { status: nextStatus })
+                  addNotification({
+                    title: `Meeting ${nextStatus}`,
+                    description: `${selectedMeeting.hotel} · ${selectedMeeting.date} ${selectedMeeting.time}`,
+                    type: nextStatus === 'Confirmed' ? 'success' : 'info',
+                    target: 'meetings',
+                  })
+                  setSelectedMeetingId(null)
                 }}
               >
-                Confirm Meeting ✓
+                {selectedMeeting.status === 'Draft' ? 'Send Invitation →' : selectedMeeting.status === 'Sent' ? 'Mark Waiting Confirm →' : 'Confirm Meeting ✓'}
               </button>
             )}
           </div>

@@ -12,6 +12,7 @@ import {
   type WorkspacePage,
   type WorkspaceRole,
 } from "./components/WorkspaceShellContext"
+import { MeetingProvider } from "./components/MeetingContext"
 
 const navItems: {
   id: WorkspacePage
@@ -281,7 +282,8 @@ export default function App() {
 
   return (
     <WorkspaceShellProvider value={{ role, navigate, addNotification }}>
-      <div
+      <MeetingProvider>
+        <div
         className="flex min-h-screen"
         style={{ background: "var(--color-surface)" }}
       >
@@ -520,7 +522,8 @@ export default function App() {
           </div>
         </>
       )}
-      </div>
+        </div>
+      </MeetingProvider>
     </WorkspaceShellProvider>
   )
 }

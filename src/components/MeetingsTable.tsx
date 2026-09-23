@@ -1,33 +1,11 @@
 import { useState } from 'react'
-
-type MeetingStatus = 'Draft' | 'Sent' | 'Confirmed' | 'Completed' | 'Declined' | 'Postponed' | 'No-show'
-type MeetingType   = 'ORM' | 'Marcom'
-
-interface Meeting {
-  id: number; hotel: string; type: MeetingType; ownerAE: string
-  tier: string; tierPct: number; orm: string; date: string; time: string
-  status: MeetingStatus; surveyStatus: 'Pending' | 'Submitted' | 'N/A' | 'Overdue'; hotelStatus: string
-}
-
-const meetings: Meeting[] = [
-  { id:  1, hotel: 'Riverside Krabi Resort',            type: 'ORM',    ownerAE: 'Somchai K.', tier: 'A', tierPct: 92, orm: 'Niran T.',   date: '2026-09-10', time: '09:00', status: 'Completed', surveyStatus: 'Submitted', hotelStatus: 'Active'    },
-  { id:  2, hotel: 'Sunset Villa Phuket',               type: 'Marcom', ownerAE: 'Pranee S.',  tier: 'A', tierPct: 88, orm: 'Wanchai P.', date: '2026-09-12', time: '13:00', status: 'Completed', surveyStatus: 'Submitted', hotelStatus: 'Active'    },
-  { id:  3, hotel: 'Bay Resort Pattaya',                type: 'ORM',    ownerAE: 'Somchai K.', tier: 'B', tierPct: 74, orm: 'Niran T.',   date: '2026-09-15', time: '09:00', status: 'Completed', surveyStatus: 'Overdue',   hotelStatus: 'Active'    },
-  { id:  4, hotel: 'Ocean View Koh Samui',              type: 'Marcom', ownerAE: 'Wanchai P.', tier: 'A', tierPct: 95, orm: 'Pranee S.',  date: '2026-09-23', time: '15:00', status: 'Confirmed', surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id:  5, hotel: 'Hillside Chiang Mai',               type: 'ORM',    ownerAE: 'Somchai K.', tier: 'B', tierPct: 80, orm: 'Niran T.',   date: '2026-09-25', time: '13:00', status: 'Confirmed', surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id:  6, hotel: 'Azure Beach Hua Hin',               type: 'Marcom', ownerAE: 'Niran T.',   tier: 'B', tierPct: 65, orm: 'Wanchai P.', date: '2026-09-28', time: '09:00', status: 'Sent',      surveyStatus: 'N/A',       hotelStatus: 'Onboarding'},
-  { id:  7, hotel: 'Palm Garden Rayong',                type: 'ORM',    ownerAE: 'Somchai K.', tier: 'C', tierPct: 50, orm: 'Niran T.',   date: '2026-09-30', time: '13:00', status: 'Sent',      surveyStatus: 'N/A',       hotelStatus: 'Onboarding'},
-  { id:  8, hotel: 'Lagoon Resort Krabi',               type: 'Marcom', ownerAE: 'Pranee S.',  tier: 'B', tierPct: 71, orm: 'Wanchai P.', date: '2026-10-02', time: '15:00', status: 'Draft',     surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id:  9, hotel: 'Mountain View Pai',                 type: 'ORM',    ownerAE: 'Wanchai P.', tier: 'C', tierPct: 45, orm: 'Niran T.',   date: '2026-10-05', time: '09:00', status: 'Draft',     surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id: 10, hotel: 'Ocean View Phuket + Sunset Villa',  type: 'Marcom', ownerAE: 'Somchai K.', tier: 'A', tierPct: 90, orm: 'Pranee S.',  date: '2026-09-08', time: '13:00', status: 'Completed', surveyStatus: 'Submitted', hotelStatus: 'Active'    },
-  { id: 11, hotel: 'Sea Breeze Trat',                   type: 'ORM',    ownerAE: 'Niran T.',   tier: 'C', tierPct: 52, orm: 'Wanchai P.', date: '2026-09-06', time: '09:00', status: 'Declined',  surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id: 12, hotel: 'Hilltop View Chiang Rai',           type: 'Marcom', ownerAE: 'Pranee S.',  tier: 'A', tierPct: 85, orm: 'Niran T.',   date: '2026-09-18', time: '15:00', status: 'Postponed', surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-  { id: 13, hotel: 'Lotus Garden Sukhothai',            type: 'ORM',    ownerAE: 'Somchai K.', tier: 'B', tierPct: 68, orm: 'Wanchai P.', date: '2026-09-20', time: '13:00', status: 'No-show',   surveyStatus: 'N/A',       hotelStatus: 'Active'    },
-]
+import { type Meeting, type MeetingStatus, type MeetingType, useMeetings } from './MeetingContext'
+import { useWorkspaceShell } from './WorkspaceShellContext'
 
 const STATUS_STYLES: Record<MeetingStatus, { bg: string; text: string }> = {
   Draft:     { bg: '#F5F7FA', text: '#6B7280' },
   Sent:      { bg: '#FFF8E6', text: '#D97706' },
+  'Waiting Confirm': { bg: '#FFF8E6', text: '#B45309' },
   Confirmed: { bg: '#EBF2FF', text: '#1A56DB' },
   Completed: { bg: '#F0FDF4', text: '#16A34A' },
   Declined:  { bg: '#FFF0F0', text: '#DC2626' },
@@ -43,24 +21,95 @@ const SURVEY_STYLES: Record<string, { bg: string; text: string }> = {
 }
 
 export default function MeetingsTable() {
+  const { meetings, addMeeting, updateMeeting } = useMeetings()
+  const { addNotification, role } = useWorkspaceShell()
   const [filterStatus, setFilterStatus] = useState<MeetingStatus | 'All'>('All')
   const [filterType,   setFilterType]   = useState<MeetingType   | 'All'>('All')
   const [filterTier,   setFilterTier]   = useState('All')
+  const [filterOwner, setFilterOwner] = useState('All')
   const [search, setSearch]             = useState('')
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
   const [postponeModal, setPostponeModal] = useState<Meeting | null>(null)
   const [postponeDate, setPostponeDate] = useState('')
   const [postponeReason, setPostponeReason] = useState('')
+  const [newMeetingOpen, setNewMeetingOpen] = useState(false)
+  const [newMeeting, setNewMeeting] = useState({
+    hotel: '', type: 'ORM' as MeetingType, ownerAE: 'Somchai K.', tier: 'B' as Meeting['tier'],
+    date: '2026-09-23', time: '09:00', orm: 'Niran T.',
+  })
 
   const filtered = meetings.filter((m) => {
     if (filterStatus !== 'All' && m.status !== filterStatus) return false
     if (filterType   !== 'All' && m.type   !== filterType)   return false
     if (filterTier   !== 'All' && m.tier   !== filterTier)   return false
+    if (role === 'Manager' && filterOwner !== 'All' && m.ownerAE !== filterOwner) return false
     if (search && !m.hotel.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
-  const statuses: (MeetingStatus | 'All')[] = ['All','Draft','Sent','Confirmed','Completed','Declined','Postponed','No-show']
+  const statuses: (MeetingStatus | 'All')[] = ['All','Draft','Sent','Waiting Confirm','Confirmed','Completed','Declined','Postponed','No-show']
+  const owners = Array.from(new Set(meetings.map((meeting) => meeting.ownerAE)))
+  const meetingConflict = meetings.some((meeting) => meeting.date === newMeeting.date && meeting.time === newMeeting.time && meeting.status !== 'Declined')
+
+  function openPostpone(meeting: Meeting) {
+    setPostponeModal(meeting)
+    setPostponeDate(meeting.date)
+    setPostponeReason('')
+  }
+
+  function confirmPostpone() {
+    if (!postponeModal || !postponeDate || !postponeReason.trim()) return
+    updateMeeting(postponeModal.id, {
+      date: postponeDate,
+      status: 'Postponed',
+      note: postponeReason.trim(),
+    })
+    addNotification({
+      title: 'Meeting postponed',
+      description: `${postponeModal.hotel} moved to ${postponeDate}`,
+      type: 'warning',
+      target: 'meetings',
+    })
+    setPostponeModal(null)
+    setPostponeDate('')
+    setPostponeReason('')
+  }
+
+  function createMeeting() {
+    if (!newMeeting.hotel.trim() || !newMeeting.date) return
+    addMeeting({
+      ...newMeeting,
+      hotel: newMeeting.hotel.trim(),
+      tierPct: newMeeting.tier === 'A' ? 90 : newMeeting.tier === 'B' ? 70 : 50,
+      status: 'Draft',
+      surveyStatus: 'N/A',
+      hotelStatus: 'Active',
+    })
+    addNotification({
+      title: 'New meeting drafted',
+      description: `${newMeeting.hotel.trim()} · ${newMeeting.date} ${newMeeting.time}`,
+      type: 'success',
+      target: 'meetings',
+    })
+    setNewMeetingOpen(false)
+    setNewMeeting((current) => ({ ...current, hotel: '' }))
+  }
+
+  function advanceMeeting(meeting: Meeting) {
+    const nextStatus: MeetingStatus = meeting.status === 'Draft'
+      ? 'Sent'
+      : meeting.status === 'Sent'
+        ? 'Waiting Confirm'
+        : 'Confirmed'
+    updateMeeting(meeting.id, { status: nextStatus })
+    setSelectedMeeting(null)
+    addNotification({
+      title: `Meeting ${nextStatus}`,
+      description: `${meeting.hotel} · ${meeting.date} ${meeting.time}`,
+      type: nextStatus === 'Confirmed' ? 'success' : 'info',
+      target: 'meetings',
+    })
+  }
 
   return (
     <div className="h-full overflow-auto p-4 md:p-8">
@@ -74,7 +123,7 @@ export default function MeetingsTable() {
             รายการนัดหมายทั้งหมด · {meetings.length} รายการ
           </p>
         </div>
-        <button className="btn-primary">+ New Meeting</button>
+        <button className="btn-primary" onClick={() => setNewMeetingOpen(true)}>+ New Meeting</button>
       </div>
 
       {/* Filters */}
@@ -103,6 +152,17 @@ export default function MeetingsTable() {
         >
           {statuses.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Status' : s}</option>)}
         </select>
+        {role === 'Manager' && (
+          <select
+            value={filterOwner}
+            onChange={(e) => setFilterOwner(e.target.value)}
+            className="text-sm px-3 py-2 rounded-xl border outline-none"
+            style={{ background: '#fff', borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+          >
+            <option value="All">All Owners</option>
+            {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+          </select>
+        )}
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value as MeetingType | 'All')}
@@ -180,10 +240,10 @@ export default function MeetingsTable() {
 
       {/* Desktop: Table */}
       <div
-        className="hidden md:block rounded-2xl border overflow-hidden bg-white"
+        className="hidden md:block rounded-2xl border overflow-x-auto bg-white"
         style={{ borderColor: 'var(--color-border)', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}
       >
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr style={{ background: 'var(--color-surface)' }}>
               {['Hotel', 'Type', 'Owner AE', 'Tier', 'ORM', 'Date & Time', 'Status', 'Survey', 'Actions'].map((h) => (
@@ -252,11 +312,11 @@ export default function MeetingsTable() {
                       >
                         View
                       </button>
-                      {(m.status === 'Confirmed' || m.status === 'Sent') && (
+                      {(m.status === 'Confirmed' || m.status === 'Sent' || m.status === 'Waiting Confirm') && (
                         <button
                           className="badge cursor-pointer hover:opacity-80"
                           style={{ background: '#FFF8E6', color: '#D97706' }}
-                          onClick={() => setPostponeModal(m)}
+                          onClick={() => openPostpone(m)}
                         >
                           Postpone
                         </button>
@@ -322,14 +382,27 @@ export default function MeetingsTable() {
                 </div>
               ))}
             </div>
-            {selectedMeeting.status === 'Confirmed' && (
+            {(['Confirmed', 'Sent', 'Waiting Confirm'] as MeetingStatus[]).includes(selectedMeeting.status) && (
               <button
                 className="w-full py-2.5 rounded-xl text-sm font-bold"
                 style={{ background: '#FFF8E6', color: '#D97706' }}
-                onClick={() => { setPostponeModal(selectedMeeting); setSelectedMeeting(null) }}
+                onClick={() => { openPostpone(selectedMeeting); setSelectedMeeting(null) }}
               >
                 Postpone Meeting
               </button>
+            )}
+            {(['Draft', 'Sent', 'Waiting Confirm'] as MeetingStatus[]).includes(selectedMeeting.status) && (
+              <button
+                className="btn-primary mt-2 w-full text-center"
+                onClick={() => advanceMeeting(selectedMeeting)}
+              >
+                {selectedMeeting.status === 'Draft' ? 'Send Invitation →' : selectedMeeting.status === 'Sent' ? 'Mark Waiting Confirm →' : 'Confirm Meeting ✓'}
+              </button>
+            )}
+            {selectedMeeting.note && (
+              <div className="mt-3 rounded-xl p-3 text-xs font-thai" style={{ background: '#FFF8E6', color: '#92400E' }}>
+                เหตุผลการเลื่อน: {selectedMeeting.note}
+              </div>
             )}
           </div>
         </div>
@@ -365,9 +438,62 @@ export default function MeetingsTable() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="btn-primary flex-1 text-center" onClick={() => setPostponeModal(null)}>ยืนยันเลื่อน</button>
+              <button className="btn-primary flex-1 text-center disabled:cursor-not-allowed disabled:opacity-40" disabled={!postponeDate || !postponeReason.trim()} onClick={confirmPostpone}>ยืนยันเลื่อน</button>
               <button className="btn-ghost flex-1 text-center" onClick={() => setPostponeModal(null)}>ยกเลิก</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Meeting Modal */}
+      {newMeetingOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md rounded-2xl p-6 bg-white shadow-2xl">
+            <h3 className="font-heading text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Draft New Meeting</h3>
+            <p className="mt-1 mb-5 text-sm font-thai" style={{ color: 'var(--color-text-muted)' }}>สร้างนัดหมายใหม่และส่งต่อใน workflow เดียวกับ Calendar</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="col-span-2 text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                Hotel
+                <input value={newMeeting.hotel} onChange={(e) => setNewMeeting((current) => ({ ...current, hotel: e.target.value }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="Hotel name" />
+              </label>
+              <label className="text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                Type
+                <select value={newMeeting.type} onChange={(e) => setNewMeeting((current) => ({ ...current, type: e.target.value as MeetingType, orm: e.target.value === 'ORM' ? 'Niran T.' : 'Wanchai P.' }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)' }}>
+                  <option value="ORM">ORM</option><option value="Marcom">Marcom</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                Tier
+                <select value={newMeeting.tier} onChange={(e) => setNewMeeting((current) => ({ ...current, tier: e.target.value as Meeting['tier'] }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)' }}>
+                  <option value="A">Tier A</option><option value="B">Tier B</option><option value="C">Tier C</option>
+                </select>
+              </label>
+              <label className="text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                Date
+                <input type="date" value={newMeeting.date} onChange={(e) => setNewMeeting((current) => ({ ...current, date: e.target.value }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)' }} />
+              </label>
+              <label className="text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                Time
+                <select value={newMeeting.time} onChange={(e) => setNewMeeting((current) => ({ ...current, time: e.target.value }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)' }}>
+                  {['09:00','11:00','13:00','15:00','17:00'].map((time) => <option key={time}>{time}</option>)}
+                </select>
+              </label>
+              {role === 'Manager' && (
+                <label className="col-span-2 text-xs font-bold" style={{ color: 'var(--color-text-muted)' }}>
+                  Owner AE
+                  <select value={newMeeting.ownerAE} onChange={(e) => setNewMeeting((current) => ({ ...current, ownerAE: e.target.value }))} className="mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm font-normal outline-none" style={{ borderColor: 'var(--color-border)' }}>
+                    {owners.map((owner) => <option key={owner}>{owner}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button className="btn-primary flex-1 text-center disabled:cursor-not-allowed disabled:opacity-40" disabled={!newMeeting.hotel.trim() || !newMeeting.date || meetingConflict} onClick={createMeeting}>Create Draft</button>
+              <button className="btn-ghost flex-1 text-center" onClick={() => setNewMeetingOpen(false)}>Cancel</button>
+            </div>
+            {meetingConflict && (
+              <p className="mt-2 text-center text-xs font-thai" style={{ color: '#DC2626' }}>ช่วงเวลานี้มีนัดหมายแล้ว กรุณาเลือกเวลาอื่น</p>
+            )}
           </div>
         </div>
       )}
