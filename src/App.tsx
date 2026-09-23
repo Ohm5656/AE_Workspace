@@ -6,10 +6,19 @@ import OnboardingPipeline from "./components/OnboardingPipeline"
 import CalendarView from "./components/CalendarView"
 import MeetingsTable from "./components/MeetingsTable"
 import SurveyView from "./components/SurveyView"
+import {
+  WorkspaceShellProvider,
+  type WorkspaceNotification,
+  type WorkspacePage,
+  type WorkspaceRole,
+} from "./components/WorkspaceShellContext"
 
-type Page = "tasks" | "onboarding" | "calendar" | "meetings" | "surveys"
-
-const navItems: { id: Page; label: string; thai: string; emoji: string }[] = [
+const navItems: {
+  id: WorkspacePage
+  label: string
+  thai: string
+  emoji: string
+}[] = [
   { id: "tasks", label: "My Tasks", thai: "งานของฉัน", emoji: "✓" },
   { id: "onboarding", label: "Onboarding", thai: "รับโรงแรมใหม่", emoji: "⬡" },
   { id: "calendar", label: "Calendar", thai: "ปฏิทิน", emoji: "▦" },
@@ -17,15 +26,79 @@ const navItems: { id: Page; label: string; thai: string; emoji: string }[] = [
   { id: "surveys", label: "Surveys", thai: "แบบประเมิน", emoji: "◉" },
 ]
 
+const initialNotifications: WorkspaceNotification[] = [
+  {
+    id: 1,
+    title: "SLA Overdue",
+    description: "Riverside Krabi exceeded 72h in Collect Data",
+    time: "2h ago",
+    type: "error",
+    target: "onboarding",
+    read: false,
+  },
+  {
+    id: 2,
+    title: "Survey Pending",
+    description: "Bay Resort Pattaya survey is 5 days overdue",
+    time: "1d ago",
+    type: "warning",
+    target: "surveys",
+    read: false,
+  },
+  {
+    id: 3,
+    title: "Flag Created",
+    description: "Sunset Villa was routed to GRM",
+    time: "2d ago",
+    type: "info",
+    target: "surveys",
+    read: false,
+  },
+]
+
 export default function App() {
-  const [page, setPage] = useState<Page>("tasks")
-  const [role, setRole] = useState<"AE" | "Manager">("AE")
+  const [page, setPage] = useState<WorkspacePage>("tasks")
+  const [role, setRole] = useState<WorkspaceRole>("AE")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] =
+    useState<WorkspaceNotification[]>(initialNotifications)
 
-  function navigate(p: Page) {
+  const unreadCount = notifications.filter((item) => !item.read).length
+
+  function navigate(p: WorkspacePage) {
     setPage(p)
     setSidebarOpen(false)
+  }
+
+  function addNotification(
+    notification: Omit<WorkspaceNotification, "id" | "time" | "read">,
+  ) {
+    setNotifications((current) => [
+      {
+        ...notification,
+        id: Date.now(),
+        time: "Just now",
+        read: false,
+      },
+      ...current,
+    ])
+  }
+
+  function openNotification(notification: WorkspaceNotification) {
+    setNotifications((current) =>
+      current.map((item) =>
+        item.id === notification.id ? { ...item, read: true } : item,
+      ),
+    )
+    setNotifOpen(false)
+    navigate(notification.target)
+  }
+
+  function markAllRead() {
+    setNotifications((current) =>
+      current.map((item) => ({ ...item, read: true })),
+    )
   }
 
   const SidebarContent = () => (
@@ -51,7 +124,10 @@ export default function App() {
           className="ml-auto md:hidden text-xl leading-none"
           style={{ color: "var(--color-text-muted)" }}
           onClick={() => setSidebarOpen(false)}
-        ></button>
+          aria-label="ปิดเมนู"
+        >
+          ✕
+        </button>
       </div>
 
       {/* Role switcher */}
@@ -150,21 +226,25 @@ export default function App() {
         >
           <span className="relative">
             <span className="text-base">🔔</span>
-            <span
-              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
-              style={{ background: "var(--color-overdue)" }}
-            />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                style={{ background: "var(--color-overdue)" }}
+              />
+            )}
           </span>
           <span className="font-medium">Notifications</span>
-          <span
-            className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
-            style={{
-              background: "var(--color-overdue-bg)",
-              color: "var(--color-overdue)",
-            }}
-          >
-            3
-          </span>
+          {unreadCount > 0 && (
+            <span
+              className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
+              style={{
+                background: "var(--color-overdue-bg)",
+                color: "var(--color-overdue)",
+              }}
+            >
+              {unreadCount}
+            </span>
+          )}
         </button>
 
         <div
@@ -185,13 +265,13 @@ export default function App() {
               className="text-xs font-semibold truncate"
               style={{ color: "var(--color-text)" }}
             >
-              Somchai Kittipong
+              {role === "AE" ? "Somchai Kittipong" : "Nattaya Manager"}
             </div>
             <div
               className="text-xs"
               style={{ color: "var(--color-text-muted)" }}
             >
-              AE · South Region
+              {role === "AE" ? "AE · South Region" : "Partner Manager · Thailand"}
             </div>
           </div>
         </div>
@@ -200,10 +280,11 @@ export default function App() {
   )
 
   return (
-    <div
-      className="flex min-h-screen"
-      style={{ background: "var(--color-surface)" }}
-    >
+    <WorkspaceShellProvider value={{ role, navigate, addNotification }}>
+      <div
+        className="flex min-h-screen"
+        style={{ background: "var(--color-surface)" }}
+      >
       {/* ─── Desktop sidebar ─── */}
       <aside
         className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0"
@@ -283,25 +364,37 @@ export default function App() {
             onClick={() => setNotifOpen(!notifOpen)}
           >
             <span className="text-lg">🔔</span>
-            <span
-              className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
-              style={{ background: "var(--color-overdue)" }}
-            />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white"
+                style={{ background: "var(--color-overdue)" }}
+              />
+            )}
           </button>
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">
-          {page === "tasks" && <MyTasks />}
-          {page === "onboarding" && <OnboardingPipeline />}
-          {page === "calendar" && <CalendarView />}
-          {page === "meetings" && <MeetingsTable />}
-          {page === "surveys" && <SurveyView />}
+          <section className={page === "tasks" ? "block" : "hidden"} aria-hidden={page !== "tasks"}>
+            <MyTasks />
+          </section>
+          <section className={page === "onboarding" ? "block" : "hidden"} aria-hidden={page !== "onboarding"}>
+            <OnboardingPipeline />
+          </section>
+          <section className={page === "calendar" ? "block" : "hidden"} aria-hidden={page !== "calendar"}>
+            <CalendarView />
+          </section>
+          <section className={page === "meetings" ? "block" : "hidden"} aria-hidden={page !== "meetings"}>
+            <MeetingsTable />
+          </section>
+          <section className={page === "surveys" ? "block" : "hidden"} aria-hidden={page !== "surveys"}>
+            <SurveyView />
+          </section>
         </main>
 
         {/* Mobile bottom nav */}
         <nav
-          className="md:hidden flex border-t sticky bottom-0 z-30"
+          className="md:hidden grid grid-cols-5 border-t sticky bottom-0 z-30"
           style={{
             background: "var(--color-card)",
             borderColor: "var(--color-border)",
@@ -314,7 +407,7 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
-                className="flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-all"
+                className="relative min-w-0 flex flex-col items-center py-2.5 gap-0.5 transition-all"
                 style={{
                   color: active
                     ? "var(--color-navy)"
@@ -323,8 +416,8 @@ export default function App() {
               >
                 <span className="text-base leading-none">{item.emoji}</span>
                 <span
-                  className="text-xs font-medium"
-                  style={{ fontSize: "10px" }}
+                  className="w-full truncate px-0.5 text-center font-medium"
+                  style={{ fontSize: "9px" }}
                 >
                   {item.label}
                 </span>
@@ -368,46 +461,32 @@ export default function App() {
               <button
                 className="text-xs font-medium"
                 style={{ color: "var(--color-navy)" }}
-                onClick={() => setNotifOpen(false)}
+                onClick={markAllRead}
               >
                 Mark all read
               </button>
             </div>
-            {[
-              {
-                title: "SLA Overdue",
-                desc: "Riverside Krabi exceeded 72h in Collect Data",
-                time: "2h ago",
-                type: "error",
-              },
-              {
-                title: "Survey Pending",
-                desc: "Bay Resort Pattaya survey not filled (5 days overdue)",
-                time: "1d ago",
-                type: "warn",
-              },
-              {
-                title: "Flag Created",
-                desc: "Sunset Villa flagged — routed to GRM",
-                time: "2d ago",
-                type: "info",
-              },
-            ].map((n, i) => (
-              <div
-                key={i}
-                className="px-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors"
+            {notifications.map((notification) => (
+              <button
+                key={notification.id}
+                className="w-full px-4 py-3 border-b hover:bg-gray-50 cursor-pointer text-left transition-colors"
                 style={{ borderColor: "var(--color-border)" }}
+                onClick={() => openNotification(notification)}
               >
                 <div className="flex items-start gap-3">
                   <span
                     className="mt-1 w-2 h-2 rounded-full shrink-0"
                     style={{
                       background:
-                        n.type === "error"
+                        notification.read
+                          ? "var(--color-border-2)"
+                          : notification.type === "error"
                           ? "var(--color-overdue)"
-                          : n.type === "warn"
+                          : notification.type === "warning"
                             ? "var(--color-amber)"
-                            : "var(--color-navy)",
+                            : notification.type === "success"
+                              ? "var(--color-forest)"
+                              : "var(--color-navy)",
                     }}
                   />
                   <div>
@@ -415,27 +494,33 @@ export default function App() {
                       className="text-xs font-semibold"
                       style={{ color: "var(--color-text)" }}
                     >
-                      {n.title}
+                      {notification.title}
                     </div>
                     <div
                       className="text-xs mt-0.5 leading-relaxed"
                       style={{ color: "var(--color-text-muted)" }}
                     >
-                      {n.desc}
+                      {notification.description}
                     </div>
                     <div
                       className="text-xs mt-1"
                       style={{ color: "var(--color-warm-taupe)" }}
                     >
-                      {n.time}
+                      {notification.time}
                     </div>
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
+            {notifications.length === 0 && (
+              <div className="px-4 py-8 text-center text-xs" style={{ color: "var(--color-text-muted)" }}>
+                ไม่มีการแจ้งเตือน
+              </div>
+            )}
           </div>
         </>
       )}
-    </div>
+      </div>
+    </WorkspaceShellProvider>
   )
 }
