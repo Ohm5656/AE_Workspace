@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useWorkspaceShell } from "./WorkspaceShellContext"
 
 type TaskType = "Renewals" | "Onboarding" | "Coaching" | "Surveys"
@@ -207,7 +207,7 @@ const ACTION_LABEL: Record<TaskType, string> = {
 }
 
 export default function MyTasks() {
-  const { navigate, addNotification, role } = useWorkspaceShell()
+  const { navigate, addNotification, role, createdCoachingTasks } = useWorkspaceShell()
   const [taskItems, setTaskItems] = useState<Task[]>(tasks)
   const [filterType, setFilterType] = useState<TaskType | "All">("All")
   const [filterDue, setFilterDue] = useState("All")
@@ -215,6 +215,15 @@ export default function MyTasks() {
   const [sort, setSort] = useState<"due" | "type">("due")
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [lastCompleted, setLastCompleted] = useState<string | null>(null)
+
+  useEffect(() => {
+    setTaskItems((current) => {
+      const newTasks: Task[] = createdCoachingTasks
+        .filter((task) => !current.some((item) => item.id === task.id))
+        .map((task) => ({ ...task, type: "Coaching" }))
+      return newTasks.length > 0 ? [...current, ...newTasks] : current
+    })
+  }, [createdCoachingTasks])
 
   const filtered = taskItems
     .filter((t) => filterType === "All" || t.type === filterType)

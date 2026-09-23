@@ -11,6 +11,7 @@ import {
   type WorkspaceNotification,
   type WorkspacePage,
   type WorkspaceRole,
+  type CreatedCoachingTask,
 } from "./components/WorkspaceShellContext"
 import { MeetingProvider } from "./components/MeetingContext"
 
@@ -64,6 +65,7 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] =
     useState<WorkspaceNotification[]>(initialNotifications)
+  const [createdCoachingTasks, setCreatedCoachingTasks] = useState<CreatedCoachingTask[]>([])
 
   const unreadCount = notifications.filter((item) => !item.read).length
 
@@ -100,6 +102,27 @@ export default function App() {
     setNotifications((current) =>
       current.map((item) => ({ ...item, read: true })),
     )
+  }
+
+  function createCoachingTask(hotel: string) {
+    const id = Date.now()
+    setCreatedCoachingTasks((current) => [
+      ...current,
+      {
+        id,
+        title: "Low-score Survey Coaching",
+        hotel,
+        dueDate: "2026-09-24",
+        dueStatus: "soon",
+        dueLabel: "Due tomorrow",
+      },
+    ])
+    addNotification({
+      title: "Coaching task created",
+      description: `Follow up low survey score with ${hotel}`,
+      type: "success",
+      target: "tasks",
+    })
   }
 
   const SidebarContent = () => (
@@ -281,7 +304,7 @@ export default function App() {
   )
 
   return (
-    <WorkspaceShellProvider value={{ role, navigate, addNotification }}>
+    <WorkspaceShellProvider value={{ role, navigate, addNotification, createdCoachingTasks, createCoachingTask }}>
       <MeetingProvider>
         <div
         className="flex min-h-screen"

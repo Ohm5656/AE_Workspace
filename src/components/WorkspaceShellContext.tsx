@@ -28,10 +28,21 @@ interface NewNotification {
   target: WorkspacePage
 }
 
+export interface CreatedCoachingTask {
+  id: number
+  title: string
+  hotel: string
+  dueDate: string
+  dueStatus: "today" | "soon"
+  dueLabel: string
+}
+
 interface WorkspaceShellValue {
   role: WorkspaceRole
   navigate: (page: WorkspacePage) => void
   addNotification: (notification: NewNotification) => void
+  createdCoachingTasks: CreatedCoachingTask[]
+  createCoachingTask: (hotel: string) => void
 }
 
 const WorkspaceShellContext = createContext<WorkspaceShellValue | null>(null)

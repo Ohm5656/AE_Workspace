@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useMeetings } from './MeetingContext'
+import { useWorkspaceShell } from './WorkspaceShellContext'
 
 interface SurveyItem {
   id: number; hotel: string; meetingType: 'ORM' | 'Marcom'; meetingDate: string; tier: string; orm: string
@@ -35,7 +37,7 @@ const pendingQueue: SurveyItem[] = [
 
 const overdueDays: Record<number, number> = { 101: 5, 102: 8, 103: 3 }
 
-const submittedSurveys: SubmittedSurvey[] = [
+const initialSubmittedSurveys: SubmittedSurvey[] = [
   { id: 201, hotel: 'Riverside Krabi Resort',         meetingType: 'ORM',    meetingDate: '2026-09-10', submittedDate: '2026-09-11', score: 8.5, status: 'Confirmed',       tier: 'A' },
   { id: 202, hotel: 'Sunset Villa Phuket',             meetingType: 'Marcom', meetingDate: '2026-09-12', submittedDate: '2026-09-13', score: 9.2, status: 'Confirmed',       tier: 'A' },
   { id: 203, hotel: 'Bay Resort Pattaya',              meetingType: 'ORM',    meetingDate: '2026-09-08', submittedDate: '2026-09-09', score: 5.6, status: 'Flagged',         tier: 'B' },
@@ -46,7 +48,7 @@ const submittedSurveys: SubmittedSurvey[] = [
   { id: 208, hotel: 'Mountain View Pai',               meetingType: 'Marcom', meetingDate: '2026-08-28', submittedDate: '2026-08-29', score: 9.0, status: 'Confirmed',       tier: 'C' },
 ]
 
-const flaggedSurveys: FlaggedSurvey[] = [
+const initialFlaggedSurveys: FlaggedSurvey[] = [
   { id: 301, hotel: 'Sunset Villa Phuket', meetingType: 'ORM',    score: 4.8, lowQs: ['Q3: Communication (3/10)', 'Q5: Response time (4/10)'], routeTo: 'Niran T.',   routeTeam: 'GRM'        },
   { id: 302, hotel: 'Bay Resort Pattaya',  meetingType: 'Marcom', score: 5.6, lowQs: ['Q5: Content quality (4/10)'],                           routeTo: 'Wanchai P.', routeTeam: 'Marcom Lead' },
 ]
@@ -69,29 +71,103 @@ const SUBMITTED_STATUS: Record<string, { bg: string; text: string }> = {
 }
 
 export default function SurveyView() {
+  const { meetings, updateMeeting } = useMeetings()
+  const { addNotification, createCoachingTask } = useWorkspaceShell()
   const [activeZone, setActiveZone]       = useState<Zone>('A')
   const [fillSurveyHotel, setFillSurveyHotel] = useState<SurveyItem | null>(null)
   const [answers, setAnswers]             = useState<Record<number, number>>({})
-  const [submitted, setSubmitted]         = useState<Set<number>>(new Set())
+  const [pendingItems, setPendingItems] = useState<SurveyItem[]>(pendingQueue)
+  const [submittedList, setSubmittedList] = useState<SubmittedSurvey[]>(initialSubmittedSurveys)
+  const [flaggedList, setFlaggedList] = useState<FlaggedSurvey[]>(initialFlaggedSurveys)
+  const [routedFlags, setRoutedFlags] = useState<Set<number>>(new Set())
+  const [coachingFlags, setCoachingFlags] = useState<Set<number>>(new Set())
   const [previewHotel, setPreviewHotel]   = useState<SurveyItem | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   function submitSurvey() {
     if (!fillSurveyHotel) return
-    const avg = Object.values(answers).reduce((a, b) => a + b, 0) / surveyQuestions.length
-    const hasLow = Object.values(answers).some((v) => v <= 4)
-    setSubmitted((prev) => new Set([...prev, fillSurveyHotel.id]))
+    const scores = Object.values(answers)
+    if (scores.length < surveyQuestions.length) return
+    const avg = scores.reduce((a, b) => a + b, 0) / surveyQuestions.length
+    const lowEntries = Object.entries(answers).filter(([, value]) => value <= 4)
+    const hasLow = lowEntries.length > 0 || avg <= 5
+    const createdId = Date.now()
+    const today = '2026-09-23'
+
+    setSubmittedList((current) => [
+      {
+        id: createdId,
+        hotel: fillSurveyHotel.hotel,
+        meetingType: fillSurveyHotel.meetingType,
+        meetingDate: fillSurveyHotel.meetingDate,
+        submittedDate: today,
+        score: avg,
+        status: hasLow ? 'Flagged' : 'Confirmed',
+        tier: fillSurveyHotel.tier,
+      },
+      ...current,
+    ])
+
+    if (hasLow) {
+      const routeTeam = fillSurveyHotel.meetingType === 'ORM' ? 'GRM' : 'Marcom Lead'
+      setFlaggedList((current) => [
+        {
+          id: createdId,
+          hotel: fillSurveyHotel.hotel,
+          meetingType: fillSurveyHotel.meetingType,
+          score: avg,
+          lowQs: lowEntries.length > 0
+            ? lowEntries.map(([index, score]) => `${surveyQuestions[Number(index)].split(': ')[0]} (${score}/10)`)
+            : [`Average score (${avg.toFixed(1)}/10)`],
+          routeTo: fillSurveyHotel.orm,
+          routeTeam,
+        },
+        ...current,
+      ])
+      addNotification({
+        title: 'Low survey score flagged',
+        description: `${fillSurveyHotel.hotel} scored ${avg.toFixed(1)} · route to ${routeTeam}`,
+        type: 'error',
+        target: 'surveys',
+      })
+    } else {
+      addNotification({
+        title: 'Survey submitted',
+        description: `${fillSurveyHotel.hotel} scored ${avg.toFixed(1)}/10`,
+        type: 'success',
+        target: 'surveys',
+      })
+    }
+
+    const relatedMeeting = meetings.find((meeting) => meeting.hotel === fillSurveyHotel.hotel)
+    if (relatedMeeting) updateMeeting(relatedMeeting.id, { surveyStatus: 'Submitted' })
+    setPendingItems((current) => current.filter((item) => item.id !== fillSurveyHotel.id))
+    setSuccessMessage(`ส่ง Survey ของ ${fillSurveyHotel.hotel} แล้ว · คะแนน ${avg.toFixed(1)}/10${hasLow ? ' · สร้าง Flag อัตโนมัติ' : ''}`)
+    setActiveZone(hasLow ? 'D' : 'C')
     setFillSurveyHotel(null)
     setAnswers({})
-    alert(`Survey submitted!\nScore: ${avg.toFixed(1)}/10${hasLow || avg <= 5 ? '\n\n⚠️ Low score detected — Flag created automatically.' : '\n\nAll good! 🎉'}`)
   }
 
-  const pendingLeft = pendingQueue.filter((p) => !submitted.has(p.id))
+  function routeFlag(flag: FlaggedSurvey) {
+    setRoutedFlags((current) => new Set([...current, flag.id]))
+    addNotification({
+      title: `Routed to ${flag.routeTeam}`,
+      description: `${flag.hotel} assigned to ${flag.routeTo}`,
+      type: 'info',
+      target: 'surveys',
+    })
+  }
+
+  function addCoaching(flag: FlaggedSurvey) {
+    setCoachingFlags((current) => new Set([...current, flag.id]))
+    createCoachingTask(flag.hotel)
+  }
 
   const zones: { id: Zone; label: string; labelThai: string; count: number; accent: string }[] = [
     { id: 'A', label: 'Inquiry',   labelThai: 'ที่กำลังจะมา',    count: inquiries.length, accent: '#1A56DB' },
-    { id: 'B', label: 'Pending',   labelThai: 'รอกรอก Survey',   count: pendingLeft.length, accent: '#D97706' },
-    { id: 'C', label: 'Submitted', labelThai: 'ส่งแล้วเดือนนี้', count: submittedSurveys.length, accent: '#16A34A' },
-    { id: 'D', label: 'Flagged',   labelThai: 'ต้องดำเนินการ',   count: flaggedSurveys.length, accent: '#DC2626' },
+    { id: 'B', label: 'Pending',   labelThai: 'รอกรอก Survey',   count: pendingItems.length, accent: '#D97706' },
+    { id: 'C', label: 'Submitted', labelThai: 'ส่งแล้วเดือนนี้', count: submittedList.length, accent: '#16A34A' },
+    { id: 'D', label: 'Flagged',   labelThai: 'ต้องดำเนินการ',   count: flaggedList.length, accent: '#DC2626' },
   ]
 
   return (
@@ -105,6 +181,13 @@ export default function SurveyView() {
           แบบประเมินหลังประชุม · จัดการและติดตามผลการประเมิน
         </p>
       </div>
+
+      {successMessage && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-xs font-thai" style={{ background: '#F0FDF4', borderColor: '#BBF7D0', color: '#166534' }}>
+          <span>✓ {successMessage}</span>
+          <button className="font-bold" onClick={() => setSuccessMessage(null)} aria-label="ปิดข้อความ">✕</button>
+        </div>
+      )}
 
       {/* Zone tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3 mb-6">
@@ -173,7 +256,7 @@ export default function SurveyView() {
           <p className="text-xs font-bold mb-3 tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
             PENDING QUEUE — กรอกภายใน 24 ชั่วโมงหลังประชุม
           </p>
-          {pendingLeft.map((item) => {
+          {pendingItems.map((item) => {
             const days = overdueDays[item.id] ?? 1
             const isOver = days > 1
             return (
@@ -206,7 +289,7 @@ export default function SurveyView() {
               </div>
             )
           })}
-          {pendingLeft.length === 0 && (
+          {pendingItems.length === 0 && (
             <div className="text-center py-16 text-sm font-thai" style={{ color: 'var(--color-text-muted)' }}>
               ไม่มี Survey ที่ค้างอยู่ 🎉
             </div>
@@ -218,11 +301,11 @@ export default function SurveyView() {
       {activeZone === 'C' && (
         <div className="pb-8">
           <p className="text-xs font-bold mb-3 tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            SUBMITTED — {submittedSurveys.length} รายการในเดือนนี้
+            SUBMITTED — {submittedList.length} รายการในเดือนนี้
           </p>
           {/* Mobile: cards */}
           <div className="md:hidden space-y-2">
-            {submittedSurveys.map((s) => {
+            {submittedList.map((s) => {
               const ss = SUBMITTED_STATUS[s.status]
               const scoreColor = s.score >= 8 ? '#16A34A' : s.score >= 6 ? '#D97706' : '#DC2626'
               return (
@@ -263,7 +346,7 @@ export default function SurveyView() {
                 </tr>
               </thead>
               <tbody>
-                {submittedSurveys.map((s, i) => {
+                {submittedList.map((s, i) => {
                   const ss = SUBMITTED_STATUS[s.status]
                   const scoreColor = s.score >= 8 ? '#16A34A' : s.score >= 6 ? '#D97706' : '#DC2626'
                   return (
@@ -306,9 +389,9 @@ export default function SurveyView() {
       {activeZone === 'D' && (
         <div className="space-y-4 pb-8">
           <p className="text-xs font-bold mb-3 tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            FLAGGED SURVEYS — ต้องดำเนินการทันที
+            FLAGGED SURVEYS — สร้าง Flag เมื่อคะแนนเฉลี่ย ≤ 5 หรือมีคำตอบข้อใดข้อหนึ่ง ≤ 4
           </p>
-          {flaggedSurveys.map((f) => (
+          {flaggedList.map((f) => (
             <div
               key={f.id}
               className="rounded-2xl border bg-white p-5"
@@ -367,11 +450,17 @@ export default function SurveyView() {
                 <button
                   className="btn-primary flex-1 min-w-[120px] text-center"
                   style={{ background: '#DC2626', boxShadow: '0 2px 8px rgba(220,38,38,.25)' }}
+                  disabled={routedFlags.has(f.id)}
+                  onClick={() => routeFlag(f)}
                 >
-                  Route to {f.routeTeam}
+                  {routedFlags.has(f.id) ? `Routed to ${f.routeTeam} ✓` : `Route to ${f.routeTeam}`}
                 </button>
-                <button className="btn-ghost flex-1 min-w-[120px] text-center">
-                  Create Coaching Task
+                <button
+                  className="btn-ghost flex-1 min-w-[120px] text-center disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={coachingFlags.has(f.id)}
+                  onClick={() => addCoaching(f)}
+                >
+                  {coachingFlags.has(f.id) ? 'Coaching Task Created ✓' : 'Create Coaching Task'}
                 </button>
               </div>
             </div>
@@ -402,6 +491,9 @@ export default function SurveyView() {
               >✕</button>
             </div>
             <div className="px-5 py-5 space-y-5">
+              <div className="rounded-xl border px-3 py-2.5 text-xs font-thai" style={{ background: '#FFF8E6', borderColor: '#FDE68A', color: '#92400E' }}>
+                เกณฑ์อัตโนมัติ: หากคะแนนเฉลี่ย ≤ 5 หรือคำตอบข้อใดข้อหนึ่ง ≤ 4 ระบบจะสร้าง Flag และส่งต่อทีมที่รับผิดชอบ
+              </div>
               {surveyQuestions.map((q, i) => (
                 <div key={i}>
                   <div className="text-sm font-semibold mb-2.5" style={{ color: 'var(--color-text)' }}>{q}</div>
