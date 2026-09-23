@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useWorkspaceShell } from './WorkspaceShellContext'
 
 type Stage = 'New Property' | 'Introduction & Sent Form' | 'Collect Data' | '1st Check & Follow up' | 'Property Pending' | 'Final Check'
 
@@ -13,6 +14,15 @@ interface Hotel {
   isMyHotel: boolean
 }
 
+interface Activity {
+  id: number
+  hotel: string
+  actor: string
+  owner: string
+  action: string
+  time: string
+}
+
 const stages: { name: Stage; sla: number }[] = [
   { name: 'New Property',               sla: 24 },
   { name: 'Introduction & Sent Form',   sla: 24 },
@@ -24,7 +34,7 @@ const stages: { name: Stage; sla: number }[] = [
 
 const initialHotels: Hotel[] = [
   { id:  1, name: 'Azure Beach Hua Hin',       owner: 'Somchai K.',  tier: 'A', stage: 'New Property',             hoursInStage:  8, sla: 24, isMyHotel: true  },
-  { id:  2, name: 'Coral Bay Samui',            owner: 'Pranee S.',   tier: 'B', stage: 'New Property',             hoursInStage: 28, sla: 24, isMyHotel: false },
+  { id:  2, name: 'Coral Bay Samui',            owner: 'Pranee S.',   tier: 'B', stage: 'New Property',             hoursInStage: 52, sla: 24, isMyHotel: false },
   { id:  3, name: 'Palm Garden Rayong',         owner: 'Somchai K.',  tier: 'B', stage: 'Introduction & Sent Form', hoursInStage: 16, sla: 24, isMyHotel: true  },
   { id:  4, name: 'Dune Resort Krabi',          owner: 'Wanchai P.',  tier: 'C', stage: 'Introduction & Sent Form', hoursInStage: 30, sla: 24, isMyHotel: false },
   { id:  5, name: 'Riverside Krabi Resort',     owner: 'Somchai K.',  tier: 'A', stage: 'Collect Data',             hoursInStage: 85, sla: 72, isMyHotel: true  },
@@ -59,31 +69,106 @@ const TIER_STYLES: Record<string, { bg: string; text: string }> = {
 }
 
 export default function OnboardingPipeline() {
+  const { role, addNotification } = useWorkspaceShell()
   const [hotels, setHotels] = useState<Hotel[]>(initialHotels)
   const [filterMine, setFilterMine] = useState(false)
   const [search, setSearch]         = useState('')
+  const [filterTier, setFilterTier] = useState('All')
+  const [filterSla, setFilterSla] = useState('All')
+  const [filterOwner, setFilterOwner] = useState('All')
   const [moveModal, setMoveModal]   = useState<{ hotel: Hotel; nextStage: Stage } | null>(null)
   const [approveModal, setApproveModal] = useState<Hotel | null>(null)
   const [detailHotel, setDetailHotel]   = useState<Hotel | null>(null)
   const [mobileStage, setMobileStage]   = useState<Stage>('New Property')
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [activities, setActivities] = useState<Activity[]>([
+    {
+      id: 1,
+      hotel: 'Riverside Krabi Resort',
+      actor: 'Somchai K.',
+      owner: 'Somchai K.',
+      action: 'Updated CI asset checklist',
+      time: 'Today, 09:15',
+    },
+    {
+      id: 2,
+      hotel: 'Coral Bay Samui',
+      actor: 'Nattaya Manager',
+      owner: 'Pranee S.',
+      action: 'Escalated to Partner Manager (> 2× SLA)',
+      time: 'Today, 08:40',
+    },
+  ])
+
+  const actor = role === 'AE' ? 'Somchai K.' : 'Nattaya Manager'
+  const owners = Array.from(new Set(hotels.map((hotel) => hotel.owner)))
 
   const visible = hotels
     .filter((h) => !filterMine || h.isMyHotel)
+    .filter((h) => filterTier === 'All' || h.tier === filterTier)
+    .filter((h) => role !== 'Manager' || filterOwner === 'All' || h.owner === filterOwner)
+    .filter((h) => {
+      const status = slaStatus(h.hoursInStage, h.sla)
+      if (filterSla === 'All') return true
+      if (filterSla === 'At risk') return status === 'warning'
+      if (filterSla === 'Overdue') return status === 'overdue' || status === 'critical'
+      return status === 'critical'
+    })
     .filter((h) => search === '' || h.name.toLowerCase().includes(search.toLowerCase()))
 
   function moveHotel(id: number, toStage: Stage) {
+    const hotel = hotels.find((item) => item.id === id)
+    if (!hotel) return
     setHotels((prev) => prev.map((h) =>
       h.id === id ? { ...h, stage: toStage, hoursInStage: 0, sla: stages.find((s) => s.name === toStage)!.sla } : h
     ))
+    setActivities((current) => [
+      {
+        id: Date.now(),
+        hotel: hotel.name,
+        actor,
+        owner: hotel.owner,
+        action: `Moved from ${hotel.stage} to ${toStage}`,
+        time: 'Just now',
+      },
+      ...current,
+    ])
+    addNotification({
+      title: 'Onboarding stage updated',
+      description: `${hotel.name} moved to ${toStage} by ${actor}`,
+      type: 'success',
+      target: 'onboarding',
+    })
     setMoveModal(null)
   }
 
   function approveHotel(id: number) {
+    const hotel = hotels.find((item) => item.id === id)
+    if (!hotel) return
     setHotels((prev) => prev.filter((h) => h.id !== id))
+    setApprovedCount((count) => count + 1)
+    setActivities((current) => [
+      {
+        id: Date.now(),
+        hotel: hotel.name,
+        actor,
+        owner: hotel.owner,
+        action: 'Approved final check and completed onboarding',
+        time: 'Just now',
+      },
+      ...current,
+    ])
+    addNotification({
+      title: 'Onboarding completed',
+      description: `${hotel.name} passed Final Check`,
+      type: 'success',
+      target: 'onboarding',
+    })
     setApproveModal(null)
   }
 
   const overdueTotal = hotels.filter((h) => h.hoursInStage > h.sla).length
+  const criticalTotal = hotels.filter((h) => h.hoursInStage > h.sla * 2).length
 
   return (
     <div className="h-full overflow-auto p-4 md:p-8">
@@ -101,6 +186,16 @@ export default function OnboardingPipeline() {
           {overdueTotal > 0 && (
             <span className="badge" style={{ background: '#FFF0F0', color: '#DC2626' }}>
               {overdueTotal} overdue
+            </span>
+          )}
+          {criticalTotal > 0 && (
+            <span className="badge" style={{ background: '#DC2626', color: '#fff' }}>
+              {criticalTotal} escalated
+            </span>
+          )}
+          {approvedCount > 0 && (
+            <span className="badge" style={{ background: '#F0FDF4', color: '#16A34A' }}>
+              {approvedCount} approved
             </span>
           )}
           <div
@@ -125,9 +220,45 @@ export default function OnboardingPipeline() {
               boxShadow:   filterMine ? '0 2px 8px rgba(26,86,219,.25)' : 'none',
             }}
           >
-            My Hotels
+            {role === 'AE' ? 'My Hotels' : 'Somchai’s Hotels'}
           </button>
         </div>
+      </div>
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        <select
+          value={filterTier}
+          onChange={(event) => setFilterTier(event.target.value)}
+          className="rounded-xl border bg-white px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+        >
+          <option value="All">All Tiers</option>
+          <option value="A">Tier A</option>
+          <option value="B">Tier B</option>
+          <option value="C">Tier C</option>
+        </select>
+        <select
+          value={filterSla}
+          onChange={(event) => setFilterSla(event.target.value)}
+          className="rounded-xl border bg-white px-3 py-2 text-sm outline-none"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+        >
+          <option value="All">All SLA</option>
+          <option value="At risk">At risk</option>
+          <option value="Overdue">Overdue</option>
+          <option value="Escalated">Escalated &gt; 2×</option>
+        </select>
+        {role === 'Manager' && (
+          <select
+            value={filterOwner}
+            onChange={(event) => setFilterOwner(event.target.value)}
+            className="rounded-xl border bg-white px-3 py-2 text-sm outline-none"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+          >
+            <option value="All">All Owners</option>
+            {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+          </select>
+        )}
       </div>
 
       {/* ── Mobile: stage tabs + vertical list ── */}
@@ -299,6 +430,11 @@ export default function OnboardingPipeline() {
                         <span>{hotel.hoursInStage}h / {hotel.sla}h</span>
                         <span className="capitalize">{status === 'ok' ? 'On-time' : status}</span>
                       </div>
+                      {status === 'critical' && (
+                        <div className="mb-2 text-[10px] font-bold" style={{ color: '#DC2626' }}>
+                          ⚑ Partner Manager escalated
+                        </div>
+                      )}
                       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                         {nextStage && (
                           <button
@@ -410,6 +546,30 @@ export default function OnboardingPipeline() {
               <p className="text-sm font-thai mb-5" style={{ color: 'var(--color-text-muted)' }}>
                 Tier {detailHotel.tier} · {detailHotel.owner}
               </p>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                <div className="rounded-xl p-3" style={{ background: 'var(--color-surface)' }}>
+                  <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>SLA status</div>
+                  <div className="mt-1 text-sm font-bold capitalize" style={{ color: SLA_STYLES[slaStatus(detailHotel.hoursInStage, detailHotel.sla)].text }}>
+                    {slaStatus(detailHotel.hoursInStage, detailHotel.sla)}
+                  </div>
+                </div>
+                <div className="rounded-xl p-3" style={{ background: 'var(--color-surface)' }}>
+                  <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Services</div>
+                  <div className="mt-1 text-sm font-bold" style={{ color: 'var(--color-text)' }}>3 enabled</div>
+                </div>
+              </div>
+              <div className="mb-5">
+                <div className="mb-2 text-xs font-bold tracking-wide" style={{ color: 'var(--color-text-muted)' }}>SERVICE CHECKLIST</div>
+                {['Extranet account', 'Rates & availability', 'Property content'].map((item, index) => {
+                  const complete = index <= stages.findIndex((stage) => stage.name === detailHotel.stage) / 2
+                  return (
+                    <div key={item} className="mb-1.5 flex items-center gap-2 text-xs" style={{ color: complete ? 'var(--color-forest)' : 'var(--color-text-muted)' }}>
+                      <span className="w-4">{complete ? '✓' : '○'}</span>
+                      <span>{item}</span>
+                    </div>
+                  )
+                })}
+              </div>
               <div className="space-y-2">
                 {stages.map((s, i) => {
                   const currentIdx = stages.findIndex((st) => st.name === detailHotel.stage)
@@ -444,6 +604,23 @@ export default function OnboardingPipeline() {
                     </div>
                   )
                 })}
+              </div>
+              <div className="mt-6 border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="mb-3 text-xs font-bold tracking-wide" style={{ color: 'var(--color-text-muted)' }}>ACTION LOG</div>
+                <div className="space-y-3">
+                  {activities.filter((activity) => activity.hotel === detailHotel.name).map((activity) => (
+                    <div key={activity.id} className="rounded-xl p-3 text-xs" style={{ background: 'var(--color-surface)' }}>
+                      <div className="font-semibold" style={{ color: 'var(--color-text)' }}>{activity.action}</div>
+                      <div className="mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                        Actor: {activity.actor} · Owner: {activity.owner}
+                      </div>
+                      <div className="mt-1" style={{ color: 'var(--color-warm-taupe)' }}>{activity.time}</div>
+                    </div>
+                  ))}
+                  {activities.filter((activity) => activity.hotel === detailHotel.name).length === 0 && (
+                    <div className="text-xs font-thai" style={{ color: 'var(--color-text-muted)' }}>ยังไม่มีประวัติการดำเนินการ</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

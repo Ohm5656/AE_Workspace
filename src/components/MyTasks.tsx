@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useWorkspaceShell } from "./WorkspaceShellContext"
 
 type TaskType = "Renewals" | "Onboarding" | "Coaching" | "Surveys"
 type DueStatus = "overdue" | "today" | "soon" | "normal"
@@ -206,13 +207,16 @@ const ACTION_LABEL: Record<TaskType, string> = {
 }
 
 export default function MyTasks() {
+  const { navigate, addNotification, role } = useWorkspaceShell()
+  const [taskItems, setTaskItems] = useState<Task[]>(tasks)
   const [filterType, setFilterType] = useState<TaskType | "All">("All")
   const [filterDue, setFilterDue] = useState("All")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<"due" | "type">("due")
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [lastCompleted, setLastCompleted] = useState<string | null>(null)
 
-  const filtered = tasks
+  const filtered = taskItems
     .filter((t) => filterType === "All" || t.type === filterType)
     .filter((t) => filterDue === "All" || t.dueStatus === filterDue)
     .filter(
@@ -241,8 +245,40 @@ export default function MyTasks() {
     {} as Record<TaskType, Task[]>,
   )
 
-  const overdueCount = tasks.filter((t) => t.dueStatus === "overdue").length
-  const todayCount = tasks.filter((t) => t.dueStatus === "today").length
+  const overdueCount = taskItems.filter((t) => t.dueStatus === "overdue").length
+  const todayCount = taskItems.filter((t) => t.dueStatus === "today").length
+
+  function openTask(task: Task) {
+    if (task.type === "Onboarding") {
+      navigate("onboarding")
+      return
+    }
+
+    if (task.type === "Surveys") {
+      navigate("surveys")
+      return
+    }
+
+    addNotification({
+      title: `${task.type} task opened`,
+      description: `${task.title} · ${task.hotel}`,
+      type: "info",
+      target: "tasks",
+    })
+    setLastCompleted(`เปิดรายละเอียด ${task.title} แล้ว`)
+  }
+
+  function completeTask(task: Task) {
+    setTaskItems((current) => current.filter((item) => item.id !== task.id))
+    setSelectedTask(null)
+    setLastCompleted(`ทำเครื่องหมาย “${task.title}” เสร็จแล้ว`)
+    addNotification({
+      title: "Task completed",
+      description: `${task.title} · ${task.hotel}`,
+      type: "success",
+      target: "tasks",
+    })
+  }
 
   return (
     <div className="flex h-full" style={{ minHeight: "100svh" }}>
@@ -255,11 +291,17 @@ export default function MyTasks() {
               <h1
                 className="font-heading text-xl md:text-2xl font-semibold"
                 style={{ color: "var(--color-text)" }}
-              ></h1>
+              >
+                {role === "AE" ? "My Tasks" : "Team Tasks"}
+              </h1>
               <p
                 className="text-xs md:text-sm mt-1 font-thai"
                 style={{ color: "var(--color-text-muted)" }}
-              ></p>
+              >
+                {role === "AE"
+                  ? "รวมงานประจำวัน งานเร่งด่วน และสิ่งที่ต้องติดตามของคุณ"
+                  : "ภาพรวมงานของทีมสำหรับติดตามภาระงานและรายการเกินกำหนด"}
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {overdueCount > 0 && (
@@ -304,7 +346,7 @@ export default function MyTasks() {
                     className="text-xl font-heading font-bold"
                     style={{ color: c.text }}
                   >
-                    {tasks.filter((t) => t.type === type).length}
+                    {taskItems.filter((t) => t.type === type).length}
                   </div>
                   <div
                     className="text-xs font-semibold mt-0.5"
@@ -317,6 +359,26 @@ export default function MyTasks() {
             })}
           </div>
         </div>
+
+        {lastCompleted && (
+          <div
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs font-thai"
+            style={{
+              background: "#F0FDF4",
+              borderColor: "#BBF7D0",
+              color: "#166534",
+            }}
+          >
+            <span>✓ {lastCompleted}</span>
+            <button
+              className="font-bold"
+              onClick={() => setLastCompleted(null)}
+              aria-label="ปิดข้อความ"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-5">
@@ -565,10 +627,16 @@ export default function MyTasks() {
                 </div>
               )}
               <div className="space-y-2">
-                <button className="btn-primary w-full text-center">
+                <button
+                  className="btn-primary w-full text-center"
+                  onClick={() => openTask(selectedTask)}
+                >
                   {ACTION_LABEL[selectedTask.type]}
                 </button>
-                <button className="btn-ghost w-full text-center">
+                <button
+                  className="btn-ghost w-full text-center"
+                  onClick={() => completeTask(selectedTask)}
+                >
                   Mark as Done
                 </button>
               </div>
